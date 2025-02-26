@@ -16,6 +16,28 @@ type Peer struct {
 	SendMutex sync.Mutex
 }
 
+var (
+	config = webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
+	}
+)
+
+func NewPeerConnection(conn *websocket.Conn) (*Peer, error) {
+	peerConnection, err := webrtc.NewPeerConnection(config)
+	if err != nil {
+		return nil, err
+	}
+
+	peer := &Peer{
+		Conn:     conn,
+		PeerConn: peerConnection,
+	}
+
+	return peer, nil
+}
+
 func (p *Peer) SendMessage(msg models.SignalMessage) {
 	p.SendMutex.Lock()
 	defer p.SendMutex.Unlock()

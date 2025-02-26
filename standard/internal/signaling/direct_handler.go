@@ -100,24 +100,14 @@ func (s *DirectSignalingServer) handleJoin(conn *websocket.Conn, peerID string, 
 		s.Rooms[roomID] = r
 	}
 
-	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
-	}
-
-	peerConnection, err := webrtc.NewPeerConnection(config)
+	pc, err := peer.NewPeerConnection(conn)
 	if err != nil {
 		log.Printf("Failed to create peer connection: %v", err)
 		return
 	}
 
-	peer := &peer.Peer{
-		Conn:     conn,
-		PeerConn: peerConnection,
-	}
 	r.Lock.Lock()
-	r.Peers[peerID] = peer
+	r.Peers[peerID] = pc
 	r.Lock.Unlock()
 
 	*currentRoom = r
@@ -128,14 +118,14 @@ func (s *DirectSignalingServer) handleJoin(conn *websocket.Conn, peerID string, 
 		RoomID:   roomID,
 		SenderID: peerID,
 	}
-	s.sendMessage(peer, response)
+	s.sendMessage(pc, response)
 	// Notify others about new participant
 	s.notifyNewParticipant(peerID, r)
 	// Send existing participants to new peer
 	s.sendExistingParticipants(peerID, r)
 
 	// Setup ICE candidate handling
-	peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
+	pc.PeerConn.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {
 			return
 		}
@@ -152,10 +142,10 @@ func (s *DirectSignalingServer) handleJoin(conn *websocket.Conn, peerID string, 
 			SenderID: peerID,
 			Payload:  candidateData,
 		}
-		s.sendMessage(peer, msg)
+		s.sendMessage(pc, msg)
 	})
 
-	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+	pc.PeerConn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("peer.Peer %s connection state: %s", peerID, state.String())
 		if state == webrtc.PeerConnectionStateDisconnected {
 			s.handleLeave(peerID, r)
